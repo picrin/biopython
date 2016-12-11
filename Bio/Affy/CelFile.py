@@ -83,6 +83,9 @@ class Record(object):
         self.noutliers = None
         self.outliers = None
         self.modified = None
+        self._modeError = IOError("You're trying to open an Affymetrix v4"
+                          " CEL file. You have to use a read binary mode,"
+                          " like this `open(filename \"rb\")`.")
 
 
 def read(handle):
@@ -131,9 +134,7 @@ def read(handle):
         # In v4 we're always strict, as we don't have to worry about backwards
         # compatibility
         if mode != "rb":
-            raise IOError("You're trying to open an Affymetrix v4 CEL file. "
-                          "You have to use a read binary mode, like this "
-                          "`open(filename \"rb\")`.")
+            raise self._modeError
         return read_v4(handle)
 
 
@@ -159,13 +160,17 @@ def read_v4(f):
     # We follow the documentation here:
     # http://www.affymetrix.com/estore/support/developer/powertools/changelog/gcos-agcc/cel.html.affx
     record = Record()
-    preHeaders = ["magic", "version", "columns", "rows", "cellNo", "headerLen"]
+    preHeaders = [u"magic", u"version", u"columns", u"rows", u"cellNo", u"headerLen"]
     preHeadersMap = dict()
     headersMap = dict()
 
     # load pre-headers
-    for name in preHeaders:
-        preHeadersMap[name] = struct.unpack("<i", f.read(4))[0]
+    try:
+        for name in preHeaders:
+            preHeadersMap[name] = struct.unpack("<i", f.read(4))[0]
+    except UnicodeDecodeError as e:
+        raise record._modeError
+
     char = f.read(preHeadersMap["headerLen"])
     header = char.decode("ascii", "ignore")
     for header in header.split("\n"):
